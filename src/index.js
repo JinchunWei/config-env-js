@@ -12,14 +12,12 @@ class Environment {
    * } [options.environment=process.env] - system environment
    * @param {Object} [options.logs] - logging configuration
    * @param {string} [options.logs.layer="config-env"] - layer to log as
-   * @param {string} [options.logs.level="silent"] - logging level
+   * @param {string} [options.logs.level] - logging level
    */
   constructor(options) {
     const { environment = process.env, logs } = options || {};
-    const {
-      layer = "config-env",
-      level = environment.LOGGING_LEVEL || "silent",
-    } = logs || {};
+    const { layer = "config-env", level = environment.LOGGING_LEVEL } =
+      logs || {};
 
     this.environment = environment;
     this.log = logging.getLogger(layer, level);
@@ -80,6 +78,16 @@ class Environment {
   }
 
   /**
+   * Retrieve an optional string.
+   * @method
+   * @param {string} key - environment variable name
+   * @return {string}
+   */
+  getOptionalString(key) {
+    return this.environment[key];
+  }
+
+  /**
    * Retrieve a string.
    * @method
    * @param {string} key - environment variable name
@@ -87,7 +95,7 @@ class Environment {
    * @returns {string}
    */
   getString(key, fallback) {
-    const value = this.environment[key];
+    const value = this.getOptionalString(key);
     if (!value?.trim()) {
       if (fallback) return fallback;
 
@@ -108,7 +116,7 @@ class Environment {
    * @returns {boolean}
    */
   getBoolean(key, fallback) {
-    const value = this.environment[key];
+    const value = this.getOptionalString(key);
     if (value === undefined) {
       if (fallback !== undefined) return fallback;
       this.log.fatal(
@@ -136,6 +144,24 @@ class Environment {
   getUnprivilegedPort(key, fallback) {
     const value = this.getInteger(key, fallback);
     if (value > 1024 && value < 65_536) return value;
+
+    this.log.fatal(
+      { key, value, reason: "port number out of valid range" },
+      "invalid configuration value"
+    );
+    throw new EnvironmentError();
+  }
+
+  /**
+   * Retrieve a valid TCP/UDP port number.
+   * @method
+   * @param {string} key - environment variable name
+   * @param {number} [fallback] - fallback value
+   * @returns {number}
+   */
+  getPort(key, fallback) {
+    const value = this.getInteger(key, fallback);
+    if (value > 0 && value < 65_536) return value;
 
     this.log.fatal(
       { key, value, reason: "port number out of valid range" },
